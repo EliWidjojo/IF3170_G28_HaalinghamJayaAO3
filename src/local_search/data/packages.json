@@ -1,0 +1,502 @@
+[
+    {
+        "id": 0,
+        "destinationID": 7,
+        "weight": 38
+    },
+    {
+        "id": 1,
+        "destinationID": 4,
+        "weight": 94
+    },
+    {
+        "id": 2,
+        "destinationID": 10,
+        "weight": 52
+    },
+    {
+        "id": 3,
+        "destinationID": 9,
+        "weight": 21
+    },
+    {
+        "id": 4,
+        "destinationID": 3,
+        "weight": 99
+    },
+    {
+        "id": 5,
+        "destinationID": 7,
+        "weight": 9
+    },
+    {
+        "id": 6,
+        "destinationID": 7,
+        "weight": 16
+    },
+    {
+        "id": 7,
+        "destinationID": 5,
+        "weight": 76
+    },
+    {
+        "id": 8,
+        "destinationID": 6,
+        "weight": 100
+    },
+    {
+        "id": 9,
+        "destinationID": 10,
+        "weight": 99
+    },
+    {
+        "id": 10,
+        "destinationID": 7,
+        "weight": 39
+    },
+    {
+        "id": 11,
+        "destinationID": 5,
+        "weight": 77
+    },
+    {
+        "id": 12,
+        "destinationID": 10,
+        "weight": 55
+    },
+    {
+        "id": 13,
+        "destinationID": 4,
+        "weight": 72
+    },
+    {
+        "id": 14,
+        "destinationID": 9,
+        "weight": 68
+    },
+    {
+        "id": 15,
+        "destinationID": 1,
+        "weight": 74
+    },
+    {
+        "id": 16,
+        "destinationID": 8,
+        "weight": 33
+    },
+    {
+        "id": 17,
+        "destinationID": 6,
+        "weight": 52
+    },
+    {
+        "id": 18,
+        "destinationID": 8,
+        "weight": 67
+    },
+    {
+        "id": 19,
+        "destinationID": 10,
+        "weight": 20
+    },
+    {
+        "id": 20,
+        "destinationID": 7,
+        "weight": 8
+    },
+    {
+        "id": 21,
+        "destinationID": 7,
+        "weight": 33
+    },
+    {
+        "id": 22,
+        "destinationID": 7,
+        "weight": 80
+    },
+    {
+        "id": 23,
+        "destinationID": 6,
+        "weight": 24
+    },
+    {
+        "id": 24,
+        "destinationID": 7,
+        "weight": 20
+    },
+    {
+        "id": 25,
+        "destinationID": 8,
+        "weight": 8
+    },
+    {
+        "id": 26,
+        "destinationID": 9,
+        "weight": 82
+    },
+    {
+        "id": 27,
+        "destinationID": 9,
+        "weight": 51
+    },
+    {
+        "id": 28,
+        "destinationID": 6,
+        "weight": 44
+    },
+    {
+        "id": 29,
+        "destinationID": 7,
+        "weight": 48
+    },
+    {
+        "id": 30,
+        "destinationID": 5,
+        "weight": 25
+    },
+    {
+        "id": 31,
+        "destinationID": 3,
+        "weight": 8
+    },
+    {
+        "id": 32,
+        "destinationID": 7,
+        "weight": 19
+    },
+    {
+        "id": 33,
+        "destinationID": 2,
+        "weight": 8
+    },
+    {
+        "id": 34,
+        "destinationID": 8,
+        "weight": 56
+    },
+    {
+        "id": 35,
+        "destinationID": 3,
+        "weight": 8
+    },
+    {
+        "id": 36,
+        "destinationID": 8,
+        "weight": 90
+    },
+    {
+        "id": 37,
+        "destinationID": 6,
+        "weight": 18
+    },
+    {
+        "id": 38,
+        "destinationID": 3,
+        "weight": 47
+    },
+    {
+        "id": 39,
+        "destinationID": 3,
+        "weight": 94
+    },
+    {
+        "id": 40,
+        "destinationID": 8,
+        "weight": 23
+    },
+    {
+        "id": 41,
+        "destinationID": 6,
+        "weight": 7
+    },
+    {
+        "id": 42,
+        "destinationID": 8,
+        "weight": 12
+    },
+    {
+        "id": 43,
+        "destinationID": 2,
+        "weight": 22
+    },
+    {
+        "id": 44,
+        "destinationID": 6,
+        "weight": 92
+    },
+    {
+        "id": 45,
+        "destinationID": 5,
+        "weight": 57
+    },
+    {
+        "id": 46,
+        "destinationID": 1,
+        "weight": 7
+    },
+    {
+        "id": 47,
+        "destinationID": 2,
+        "weight": 50
+    },
+    {
+        "id": 48,
+        "destinationID": 6,
+        "weight": 15
+    },
+    {
+        "id": 49,
+        "destinationID": 2,
+        "weight": 44
+    },
+    {
+        "id": 50,
+        "destinationID": 3,
+        "weight": 93
+    },
+    {
+        "id": 51,
+        "destinationID": 1,
+        "weight": 83
+    },
+    {
+        "id": 52,
+        "destinationID": 2,
+        "weight": 97
+    },
+    {
+        "id": 53,
+        "destinationID": 5,
+        "weight": 92
+    },
+    {
+        "id": 54,
+        "destinationID": 5,
+        "weight": 18
+    },
+    {
+        "id": 55,
+        "destinationID": 10,
+        "weight": 47
+    },
+    {
+        "id": 56,
+        "destinationID": 10,
+        "weight": 10
+    },
+    {
+        "id": 57,
+        "destinationID": 9,
+        "weight": 70
+    },
+    {
+        "id": 58,
+        "destinationID": 8,
+        "weight": 42
+    },
+    {
+        "id": 59,
+        "destinationID": 5,
+        "weight": 76
+    },
+    {
+        "id": 60,
+        "destinationID": 9,
+        "weight": 75
+    },
+    {
+        "id": 61,
+        "destinationID": 8,
+        "weight": 64
+    },
+    {
+        "id": 62,
+        "destinationID": 6,
+        "weight": 63
+    },
+    {
+        "id": 63,
+        "destinationID": 8,
+        "weight": 6
+    },
+    {
+        "id": 64,
+        "destinationID": 1,
+        "weight": 92
+    },
+    {
+        "id": 65,
+        "destinationID": 2,
+        "weight": 43
+    },
+    {
+        "id": 66,
+        "destinationID": 8,
+        "weight": 74
+    },
+    {
+        "id": 67,
+        "destinationID": 1,
+        "weight": 64
+    },
+    {
+        "id": 68,
+        "destinationID": 6,
+        "weight": 34
+    },
+    {
+        "id": 69,
+        "destinationID": 9,
+        "weight": 41
+    },
+    {
+        "id": 70,
+        "destinationID": 8,
+        "weight": 31
+    },
+    {
+        "id": 71,
+        "destinationID": 10,
+        "weight": 50
+    },
+    {
+        "id": 72,
+        "destinationID": 5,
+        "weight": 98
+    },
+    {
+        "id": 73,
+        "destinationID": 4,
+        "weight": 40
+    },
+    {
+        "id": 74,
+        "destinationID": 1,
+        "weight": 76
+    },
+    {
+        "id": 75,
+        "destinationID": 8,
+        "weight": 82
+    },
+    {
+        "id": 76,
+        "destinationID": 3,
+        "weight": 39
+    },
+    {
+        "id": 77,
+        "destinationID": 5,
+        "weight": 98
+    },
+    {
+        "id": 78,
+        "destinationID": 8,
+        "weight": 99
+    },
+    {
+        "id": 79,
+        "destinationID": 6,
+        "weight": 51
+    },
+    {
+        "id": 80,
+        "destinationID": 1,
+        "weight": 28
+    },
+    {
+        "id": 81,
+        "destinationID": 10,
+        "weight": 36
+    },
+    {
+        "id": 82,
+        "destinationID": 2,
+        "weight": 20
+    },
+    {
+        "id": 83,
+        "destinationID": 6,
+        "weight": 62
+    },
+    {
+        "id": 84,
+        "destinationID": 2,
+        "weight": 74
+    },
+    {
+        "id": 85,
+        "destinationID": 9,
+        "weight": 44
+    },
+    {
+        "id": 86,
+        "destinationID": 6,
+        "weight": 49
+    },
+    {
+        "id": 87,
+        "destinationID": 6,
+        "weight": 82
+    },
+    {
+        "id": 88,
+        "destinationID": 9,
+        "weight": 22
+    },
+    {
+        "id": 89,
+        "destinationID": 9,
+        "weight": 38
+    },
+    {
+        "id": 90,
+        "destinationID": 8,
+        "weight": 11
+    },
+    {
+        "id": 91,
+        "destinationID": 9,
+        "weight": 17
+    },
+    {
+        "id": 92,
+        "destinationID": 8,
+        "weight": 76
+    },
+    {
+        "id": 93,
+        "destinationID": 8,
+        "weight": 56
+    },
+    {
+        "id": 94,
+        "destinationID": 2,
+        "weight": 91
+    },
+    {
+        "id": 95,
+        "destinationID": 6,
+        "weight": 77
+    },
+    {
+        "id": 96,
+        "destinationID": 7,
+        "weight": 11
+    },
+    {
+        "id": 97,
+        "destinationID": 9,
+        "weight": 17
+    },
+    {
+        "id": 98,
+        "destinationID": 4,
+        "weight": 91
+    },
+    {
+        "id": 99,
+        "destinationID": 6,
+        "weight": 95
+    }
+]

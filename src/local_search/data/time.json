@@ -1,0 +1,155 @@
+{
+    "Kelapa Gading": {
+        "Kelapa Gading": 0,
+        "Tanjung Priok": 18,
+        "Cakung": 20,
+        "Pulo Gadung": 12,
+        "Cempaka Putih": 22,
+        "Kemayoran": 25,
+        "Tanah Abang": 45,
+        "Palmerah": 65,
+        "Tebet": 40,
+        "Pancoran": 50,
+        "Cilandak": 75
+    },
+
+    "Tanjung Priok": {
+        "Kelapa Gading": 15,
+        "Tanjung Priok": 0,
+        "Cakung": 28,
+        "Pulo Gadung": 25,
+        "Cempaka Putih": 28,
+        "Kemayoran": 15,
+        "Tanah Abang": 50,
+        "Palmerah": 60,
+        "Tebet": 45,
+        "Pancoran": 55,
+        "Cilandak": 80
+    },
+
+    "Cakung": {
+        "Kelapa Gading": 18,
+        "Tanjung Priok": 30,
+        "Cakung": 0,
+        "Pulo Gadung": 20,
+        "Cempaka Putih": 28,
+        "Kemayoran": 35,
+        "Tanah Abang": 60,
+        "Palmerah": 70,
+        "Tebet": 45,
+        "Pancoran": 50,
+        "Cilandak": 70
+    },
+
+    "Pulo Gadung": {
+        "Kelapa Gading": 12,
+        "Tanjung Priok": 22,
+        "Cakung": 20,
+        "Pulo Gadung": 0,
+        "Cempaka Putih": 10,
+        "Kemayoran": 20,
+        "Tanah Abang": 30,
+        "Palmerah": 45,
+        "Tebet": 25,
+        "Pancoran": 35,
+        "Cilandak": 60
+    },
+
+    "Cempaka Putih": {
+        "Kelapa Gading": 20,
+        "Tanjung Priok": 25,
+        "Cakung": 30,
+        "Pulo Gadung": 10,
+        "Cempaka Putih": 0,
+        "Kemayoran": 8,
+        "Tanah Abang": 25,
+        "Palmerah": 35,
+        "Tebet": 25,
+        "Pancoran": 30,
+        "Cilandak": 55
+    },
+
+    "Kemayoran": {
+        "Kelapa Gading": 18,
+        "Tanjung Priok": 12,
+        "Cakung": 30,
+        "Pulo Gadung": 18,
+        "Cempaka Putih": 10,
+        "Kemayoran": 0,
+        "Tanah Abang": 25,
+        "Palmerah": 35,
+        "Tebet": 30,
+        "Pancoran": 40,
+        "Cilandak": 60
+    },
+
+    "Tanah Abang": {
+        "Kelapa Gading": 35,
+        "Tanjung Priok": 35,
+        "Cakung": 50,
+        "Pulo Gadung": 30,
+        "Cempaka Putih": 20,
+        "Kemayoran": 18,
+        "Tanah Abang": 0,
+        "Palmerah": 10,
+        "Tebet": 25,
+        "Pancoran": 25,
+        "Cilandak": 40
+    },
+
+    "Palmerah": {
+        "Kelapa Gading": 50,
+        "Tanjung Priok": 60,
+        "Cakung": 70,
+        "Pulo Gadung": 45,
+        "Cempaka Putih": 35,
+        "Kemayoran": 35,
+        "Tanah Abang": 10,
+        "Palmerah": 0,
+        "Tebet": 25,
+        "Pancoran": 25,
+        "Cilandak": 45
+    },
+
+    "Tebet": {
+        "Kelapa Gading": 40,
+        "Tanjung Priok": 45,
+        "Cakung": 40,
+        "Pulo Gadung": 25,
+        "Cempaka Putih": 25,
+        "Kemayoran": 30,
+        "Tanah Abang": 20,
+        "Palmerah": 22,
+        "Tebet": 0,
+        "Pancoran": 10,
+        "Cilandak": 25
+    },
+
+    "Pancoran": {
+        "Kelapa Gading": 50,
+        "Tanjung Priok": 60,
+        "Cakung": 50,
+        "Pulo Gadung": 35,
+        "Cempaka Putih": 30,
+        "Kemayoran": 35,
+        "Tanah Abang": 22,
+        "Palmerah": 22,
+        "Tebet": 10,
+        "Pancoran": 0,
+        "Cilandak": 18
+    },
+
+    "Cilandak": {
+        "Kelapa Gading": 75,
+        "Tanjung Priok": 80,
+        "Cakung": 70,
+        "Pulo Gadung": 60,
+        "Cempaka Putih": 55,
+        "Kemayoran": 60,
+        "Tanah Abang": 35,
+        "Palmerah": 40,
+        "Tebet": 25,
+        "Pancoran": 18,
+        "Cilandak": 0
+    }
+}
