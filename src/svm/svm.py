@@ -1,3 +1,6 @@
+import os
+import pickle
+
 import numpy as np
 
 class SVM:
@@ -153,3 +156,26 @@ class SVM:
     def predict(self, X):
         scores = self.decision_function(X)
         return np.where(scores >= 0.0, self.classes_[1], self.classes_[0])
+
+    def save_model(self, filepath):
+        """
+        Menyimpan model ke dalam file menggunakan pickle.
+        """
+        directory = os.path.dirname(filepath)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(filepath, "wb") as f:
+            pickle.dump(self, f)
+        print(f"Model berhasil disimpan di {filepath}")
+
+    @classmethod
+    def load_model(cls, filepath):
+        """
+        Memuat model dari file pickle.
+        """
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"File model tidak ditemukan: {filepath}")
+        with open(filepath, "rb") as f:
+            model = pickle.load(f)
+        print(f"Model berhasil dimuat dari {filepath}")
+        return model
