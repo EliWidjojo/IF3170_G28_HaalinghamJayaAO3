@@ -24,7 +24,7 @@ class LogisticReg:
         self.random_state = random_state #seed untuk pengacakan biar reproducible
         self.record_history = record_history #simpen [b0, b1, ...] tiap epoch di param_history 
 
-        self.bobot = None
+        self.weight = None
         self.bias = 0.0
         self.classes = None
         self.logloss_history = []
@@ -44,10 +44,10 @@ class LogisticReg:
         return 0.0, 0.0
 
     def compute_loss(self, X, y): #ngembaliin log-loss rata-rata dan log-loss + penalty/N, dimana log-loss memakai bentuk stabil (-[y log p + (1-y) log(1-p)] = log(1+e^z) - y*z) sehingga tidak ada log(0)
-        z = X @ self.bobot + self.bias
+        z = X @ self.weight + self.bias
         logloss = np.mean(np.logaddexp(0.0, z) - y * z)
         l1, l2 = self.effective_lambdas()
-        penalty = (l1 * np.sum(np.abs(self.bobot)) + l2 * np.sum(self.bobot ** 2)) / len(y)
+        penalty = (l1 * np.sum(np.abs(self.weight)) + l2 * np.sum(self.weight ** 2)) / len(y)
         return float(logloss), float(logloss + penalty)
 
     def validate_param(self):
