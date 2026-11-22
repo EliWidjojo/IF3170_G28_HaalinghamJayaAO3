@@ -71,7 +71,8 @@ class NaiveBayes:
 
             # cek unseen sekali per fitur (tabel nilai sama utk semua kelas)
             known = set(self.log_cond[f][self.classes[0]].keys())
-            unseen_mask = ~missing & ~col.isin(known).to_numpy()
+            ordinal_unknown = (col == -1).to_numpy()
+            unseen_mask = ~missing & ~col.isin(known).to_numpy() & ~ordinal_unknown
             if unseen_mask.any():
                 bad = col[unseen_mask].unique().tolist()
                 raise ValueError(
@@ -82,7 +83,7 @@ class NaiveBayes:
             # akumulasi log P(fitur=f | kelas=c) untuk tiap kelas
             for j, c in enumerate(self.classes):
                 s = col.map(self.log_cond[f][c]).to_numpy(dtype=float)
-                log_scores[:, j] += np.where(missing, 0.0, s) # NaN -> skip
+                log_scores[:, j] += np.where(missing | ordinal_unknown, 0.0, s)
 
         # normalisasi, log-sum-exp
         log_scores -= log_scores.max(axis=1, keepdims=True)

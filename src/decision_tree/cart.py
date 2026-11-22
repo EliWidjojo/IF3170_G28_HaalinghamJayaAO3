@@ -69,29 +69,23 @@ class DecisionTreeCART:
 
     def _mask(self, X, feature, threshold, categorical, missing_left):
         col = X[:, feature]
-        mask = np.zeros(len(col), dtype=bool)
-        for i, value in enumerate(col):
-            if _missing(value):
-                mask[i] = missing_left
-            elif categorical:
-                mask[i] = value == threshold
-            else:
-                mask[i] = float(value) <= threshold
-        return mask
+        if categorical:
+            return col == threshold
+        else:
+            #ga perlu cek missing lagi karena pipeline A sudah imputasi semua NaN
+            return np.asarray(col, dtype=float) <= threshold
 
     def _split_candidates(self, col, categorical):
-        valid = [v for v in col if not _missing(v)]
+        valid = np.asarray([v for v in col if not _missing(v)])
         if categorical:
             # preserve insertion order without requiring hashable category values
-            uniques = []
-            for v in valid:
-                if not any(v == seen for seen in uniques):
-                    uniques.append(v)
+            uniques = np.unique(valid)
             return uniques[:-1] if len(uniques) > 1 else []
-        arr = np.unique(np.asarray(valid, dtype=float))
-        if len(arr) < 2:
-            return []
-        return ((arr[:-1] + arr[1:]) / 2).tolist()
+        else:
+            arr = np.unique(valid.astype(float))
+            if len(arr) < 2:
+                return []
+            return ((arr[:-1] + arr[1:]) / 2).tolist()
 
     def _build(self, X, yi, depth):
         counts = np.bincount(yi, minlength=len(self.classes_))
