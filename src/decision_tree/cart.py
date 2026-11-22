@@ -1,6 +1,23 @@
-"""CART classification from scratch (Gini; numeric/categorical/missing).
+"""CART classification from scratch: efficient exact Gini splitting.
 
-No ML implementation library is used. NumPy is used for array/math operations.
+References (conceptual, NOT copied implementation):
+[6]-[14] N. U. Maulidevi, IF3270 Decision Tree Learning / Issues in DTL,
+         ITB lecture videos, 2021 (bibliography supplied in assignment).
+[23] GeeksforGeeks, 'CART (Classification And Regression Tree)',
+     https://www.geeksforgeeks.org/machine-learning/cart-classification-and-regression-tree-in-machine-learning/
+[24] GeeksforGeeks, 'Decision Tree Algorithms',
+     https://www.geeksforgeeks.org/machine-learning/decision-tree-algorithms/
+[27] L. Breiman, J. H. Friedman, R. A. Olshen, C. J. Stone,
+     Classification and Regression Trees, Wadsworth, 1984.
+[28] scikit-learn User Guide, Decision Trees / Mathematical formulation,
+     https://scikit-learn.org/stable/modules/tree.html
+
+All learning, split evaluation, and inference are implemented here using NumPy;
+no sklearn estimator or sklearn tree routines are used.
+
+Split search: sort numerical values once per feature/node, then compute all
+left/right class frequencies with cumulative sums, avoiding Python loops over
+candidate thresholds. Categorical splits are one category vs the rest.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,19 +25,16 @@ import pickle
 import numpy as np
 
 
-def _missing(v):
-    if v is None:
+def _missing(value):
+    if value is None:
         return True
     try:
-        out = np.isnan(v)
-        if isinstance(out, (bool, np.bool_)):
-            return bool(out)
+        return bool(np.isnan(value))
     except (TypeError, ValueError):
-        pass
-    try:
-        return bool(v != v)
-    except (TypeError, ValueError):
-        return False
+        try:
+            return bool(value != value)
+        except (TypeError, ValueError):
+            return False
 
 
 @dataclass
@@ -36,128 +50,230 @@ class _Node:
 
     @property
     def leaf(self):
-        return self.feature == -1
+        return self.feature < 0
 
 
 class DecisionTreeCART:
-    """Binary CART tree using weighted Gini; exact categorical equality splits.
+    """Binary, greedy CART classifier with exact Gini candidate search.
 
-    Missing values are routed left or right by whichever routing yields lower
-    weighted Gini *on training data*, and the same decision is saved for inference.
-    For categorical features, each distinct observed category is a candidate split.
-    Intended for small/medium tabular datasets; exhaustive splits can be expensive.
+    max_features: None (all), positive integer, proportion (0,1], 'sqrt', 'log2'.
+    Notes: no post-pruning, sample weighting, or surrogate splits; probabilities
+    are unsmoothed empirical class frequencies at a leaf.
     """
 
     def __init__(self, max_depth=8, min_samples_split=2, min_samples_leaf=1,
-                 min_impurity_decrease=1e-10, max_features=None):
-        if max_depth is not None and max_depth < 0:
-            raise ValueError('max_depth must be >= 0 or None')
-        if min_samples_split < 2 or min_samples_leaf < 1:
-            raise ValueError('Invalid minimum sample parameters')
+                 min_impurity_decrease=1e-10, max_features=None, random_state=42):
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.min_impurity_decrease = min_impurity_decrease
         self.max_features = max_features
+        self.random_state = random_state
 
     @staticmethod
-    def _gini(y_index, n_classes):
-        if len(y_index) == 0:
-            return 0.0
-        p = np.bincount(y_index, minlength=n_classes) / len(y_index)
-        return float(1 - np.sum(p ** 2))
+    def _gini_from_counts(counts):
+        counts = np.asarray(counts, dtype=float)
+        totals = counts.sum(axis=-1)
+        return 1.0 - np.divide((counts ** 2).sum(axis=-1), totals ** 2,
+                               out=np.zeros_like(totals, dtype=float), where=totals > 0)
+
+    def _feature_subset(self):
+        p = self.n_features_in_
+        mf = self.max_features
+        if mf is None:
+            return np.arange(p)
+        if isinstance(mf, str):
+            n = max(1, int(np.sqrt(p))) if mf == 'sqrt' else max(1, int(np.log2(p)))
+        elif isinstance(mf, (int, np.integer)):
+            n = int(mf)
+        else:
+            n = max(1, int(float(mf) * p))
+        if n == p:
+            return np.arange(p)
+        return np.sort(self._rng.choice(p, size=n, replace=False))
+
+    def _best_numeric(self, column, yi, parent_counts):
+        # Returns (score, threshold, missing_left) or None.
+        values = np.asarray([np.nan if _missing(v) else float(v) for v in column], dtype=float)
+        missing = np.isnan(values)
+        x = values[~missing]
+        if len(x) < 2:
+            return None
+        order = np.argsort(x, kind='stable')
+        xs = x[order]
+        ys = yi[~missing][order]
+        # Candidates only between distinct consecutive values.
+        positions = np.flatnonzero(xs[:-1] < xs[1:])
+        if len(positions) == 0:
+            return None
+
+        k = len(self.classes_)
+        counts_per_position = np.zeros((len(xs), k), dtype=np.int64)
+        counts_per_position[np.arange(len(xs)), ys] = 1
+        left_valid = np.cumsum(counts_per_position, axis=0)[positions]
+        valid_counts = np.bincount(ys, minlength=k)
+        right_valid = valid_counts - left_valid
+        missing_counts = parent_counts - valid_counts
+
+        best = None
+        best_score = np.inf
+        # Evaluate missing->left first to preserve old implementation tie preference.
+        for missing_left in (True, False) if missing.any() else (True,):
+            lc = left_valid + (missing_counts if missing_left else 0)
+            rc = right_valid + (0 if missing_left else missing_counts)
+            nl = lc.sum(axis=1)
+            nr = rc.sum(axis=1)
+            allowed = (nl >= self.min_samples_leaf) & (nr >= self.min_samples_leaf)
+            if not allowed.any():
+                continue
+            scores = (nl * self._gini_from_counts(lc) +
+                      nr * self._gini_from_counts(rc)) / len(column)
+            scores[~allowed] = np.inf
+            ix = int(np.argmin(scores))
+            score = float(scores[ix])
+            # Midpoint stable against overflow for finite positive values.
+            threshold = float(xs[positions[ix]] + (xs[positions[ix] + 1] - xs[positions[ix]]) / 2)
+            if score < best_score - 1e-12:
+                best_score = score
+                best = (score, threshold, missing_left)
+        return best
+
+    def _best_categorical(self, column, yi, parent_counts):
+        values = []
+        for v in column:
+            if not _missing(v) and not any(v == u for u in values):
+                values.append(v)
+        if len(values) < 2:
+            return None
+        miss = np.array([_missing(v) for v in column], dtype=bool)
+        miss_counts = np.bincount(yi[miss], minlength=len(self.classes_))
+        best = None
+        best_score = np.inf
+        for v in values[:-1]:
+            equals = np.array([not miss[i] and a == v for i, a in enumerate(column)], dtype=bool)
+            for missing_left in (True, False) if miss.any() else (True,):
+                left_counts = np.bincount(yi[equals], minlength=len(self.classes_))
+                if missing_left:
+                    left_counts = left_counts + miss_counts
+                right_counts = parent_counts - left_counts
+                nl, nr = int(left_counts.sum()), int(right_counts.sum())
+                if min(nl, nr) < self.min_samples_leaf:
+                    continue
+                score = float((nl * self._gini_from_counts(left_counts) +
+                               nr * self._gini_from_counts(right_counts)) / len(column))
+                if score < best_score - 1e-12:
+                    best_score = score
+                    best = (score, v, missing_left)
+        return best
 
     def _mask(self, X, feature, threshold, categorical, missing_left):
         col = X[:, feature]
-        mask = np.zeros(len(col), dtype=bool)
-        for i, value in enumerate(col):
-            if _missing(value):
-                mask[i] = missing_left
-            elif categorical:
-                mask[i] = value == threshold
-            else:
-                mask[i] = float(value) <= threshold
-        return mask
-
-    def _split_candidates(self, col, categorical):
-        valid = [v for v in col if not _missing(v)]
-        if categorical:
-            # preserve insertion order without requiring hashable category values
-            uniques = []
-            for v in valid:
-                if not any(v == seen for seen in uniques):
-                    uniques.append(v)
-            return uniques[:-1] if len(uniques) > 1 else []
-        arr = np.unique(np.asarray(valid, dtype=float))
-        if len(arr) < 2:
-            return []
-        return ((arr[:-1] + arr[1:]) / 2).tolist()
+        if not categorical:
+            numeric = np.asarray([np.nan if _missing(v) else float(v) for v in col])
+            mask = numeric <= threshold
+            if missing_left:
+                mask[np.isnan(numeric)] = True
+            return mask
+        return np.array([missing_left if _missing(v) else v == threshold for v in col], dtype=bool)
 
     def _build(self, X, yi, depth):
+        n = len(yi)
         counts = np.bincount(yi, minlength=len(self.classes_))
-        node = _Node(probabilities=counts / len(yi),
-                     prediction_index=int(np.argmax(counts)))
-        parent_gini = self._gini(yi, len(self.classes_))
-        if (parent_gini <= 1e-15 or len(yi) < self.min_samples_split or
-                (self.max_depth is not None and depth >= self.max_depth)):
+        node = _Node(probabilities=counts / n, prediction_index=int(np.argmax(counts)))
+        parent_gini = float(self._gini_from_counts(counts))
+        if (parent_gini <= 1e-15 or n < self.min_samples_split or
+                (self.max_depth is not None and depth >= self.max_depth) or
+                n < 2 * self.min_samples_leaf):
             return node
 
         best = None
         best_score = parent_gini
-        for j in range(X.shape[1]):
+        for j in self._feature_subset():
             categorical = self.feature_types_[j] == 'categorical'
-            for threshold in self._split_candidates(X[:, j], categorical):
-                for missing_left in (True, False):
-                    mask = self._mask(X, j, threshold, categorical, missing_left)
-                    n_left = int(mask.sum())
-                    n_right = len(mask) - n_left
-                    if min(n_left, n_right) < self.min_samples_leaf:
-                        continue
-                    score = (n_left * self._gini(yi[mask], len(self.classes_)) +
-                             n_right * self._gini(yi[~mask], len(self.classes_))) / len(yi)
-                    if score < best_score - 1e-12:
-                        best_score = score
-                        best = (j, threshold, categorical, missing_left, mask)
+            candidate = (self._best_categorical(X[:, j], yi, counts) if categorical
+                         else self._best_numeric(X[:, j], yi, counts))
+            if candidate is None:
+                continue
+            score, threshold, missing_left = candidate
+            if score < best_score - 1e-12:
+                best_score = score
+                best = (j, threshold, categorical, missing_left)
+
         if best is None or parent_gini - best_score < self.min_impurity_decrease:
             return node
-        j, threshold, categorical, missing_left, mask = best
-        node.feature, node.threshold = j, threshold
-        node.categorical, node.missing_left = categorical, missing_left
-        node.left = self._build(X[mask], yi[mask], depth+1)
-        node.right = self._build(X[~mask], yi[~mask], depth+1)
+        j, threshold, categorical, missing_left = best
+        mask = self._mask(X, j, threshold, categorical, missing_left)
+        node.feature = int(j)
+        node.threshold = threshold
+        node.categorical = categorical
+        node.missing_left = missing_left
+        node.left = self._build(X[mask], yi[mask], depth + 1)
+        node.right = self._build(X[~mask], yi[~mask], depth + 1)
         return node
 
+    def _validate_parameters(self, n_features):
+        if self.max_depth is not None and (not isinstance(self.max_depth, (int, np.integer)) or self.max_depth < 0):
+            raise ValueError('max_depth must be a nonnegative integer or None')
+        if (not isinstance(self.min_samples_split, (int, np.integer)) or self.min_samples_split < 2 or
+            not isinstance(self.min_samples_leaf, (int, np.integer)) or self.min_samples_leaf < 1):
+            raise ValueError('Invalid minimum sample parameters')
+        if not np.isfinite(self.min_impurity_decrease) or self.min_impurity_decrease < 0:
+            raise ValueError('min_impurity_decrease must be finite and >= 0')
+        mf = self.max_features
+        if mf is not None:
+            if isinstance(mf, str):
+                if mf not in ('sqrt', 'log2'):
+                    raise ValueError('max_features must be None, sqrt, log2, integer, or fraction')
+            elif isinstance(mf, (int, np.integer)):
+                if not (1 <= mf <= n_features):
+                    raise ValueError('max_features integer must be 1..n_features')
+            elif isinstance(mf, (float, np.floating)):
+                if not (0 < mf <= 1):
+                    raise ValueError('max_features fraction must be in (0,1]')
+            else:
+                raise ValueError('Invalid max_features')
+
     def fit(self, X, y, feature_types=None):
-        # Accept NumPy arrays or Pandas DataFrames, but perform tree learning ourselves.
         if hasattr(X, 'columns'):
             self.feature_names_ = list(X.columns)
+            if len(set(self.feature_names_)) != len(self.feature_names_):
+                raise ValueError('Feature names must be unique')
             raw = X.to_numpy(dtype=object)
             if feature_types is None:
                 from pandas.api.types import is_numeric_dtype
                 feature_types = ['numeric' if is_numeric_dtype(X[c]) else 'categorical'
                                  for c in X.columns]
         else:
-            raw = np.asarray(X, dtype=object)
             self.feature_names_ = None
+            raw = np.asarray(X, dtype=object)
         targets = np.asarray(y).ravel()
-        if raw.ndim != 2 or len(raw) != len(targets) or len(raw) == 0 or raw.shape[1] == 0:
-            raise ValueError('X must be a nonempty 2D array, matching y')
+        if raw.ndim != 2 or len(raw) == 0 or raw.shape[1] == 0 or len(targets) != len(raw):
+            raise ValueError('X must be a nonempty 2D matrix with matching y')
         if any(_missing(v) for v in targets):
-            raise ValueError('Missing target labels not supported')
+            raise ValueError('Missing target labels are not supported')
+        self._validate_parameters(raw.shape[1])
         if feature_types is None:
             feature_types = []
             for j in range(raw.shape[1]):
-                valid = [v for v in raw[:, j] if not _missing(v)]
                 try:
-                    for v in valid: float(v)
+                    for v in raw[:, j]:
+                        if not _missing(v):
+                            float(v)
                     feature_types.append('numeric')
                 except (TypeError, ValueError):
                     feature_types.append('categorical')
         if len(feature_types) != raw.shape[1] or any(t not in ('numeric', 'categorical') for t in feature_types):
-            raise ValueError('feature_types must specify numeric/categorical per column')
+            raise ValueError('feature_types must contain numeric/categorical per column')
         self.feature_types_ = list(feature_types)
         self.n_features_in_ = raw.shape[1]
+        # Reject +/- infinity, because split logic assumes finite nonmissing numbers.
+        for j, t in enumerate(self.feature_types_):
+            if t == 'numeric':
+                for v in raw[:, j]:
+                    if not _missing(v) and not np.isfinite(float(v)):
+                        raise ValueError(f'Numeric feature {j} contains infinity')
         self.classes_, yi = np.unique(targets, return_inverse=True)
+        self._rng = np.random.default_rng(self.random_state)
         self.tree_ = self._build(raw, yi, 0)
         return self
 
@@ -165,7 +281,10 @@ class DecisionTreeCART:
         if not hasattr(self, 'tree_'):
             raise RuntimeError('Call fit before predict')
         if hasattr(X, 'columns') and self.feature_names_ is not None:
-            X = X.reindex(columns=self.feature_names_)
+            missing = set(self.feature_names_) - set(X.columns)
+            if missing:
+                raise ValueError(f'Missing columns: {sorted(missing)}')
+            X = X.loc[:, self.feature_names_]
             raw = X.to_numpy(dtype=object)
         else:
             raw = np.asarray(X, dtype=object)
@@ -177,18 +296,18 @@ class DecisionTreeCART:
 
     def predict_proba(self, X):
         raw = self._validate_X(X)
-        result = np.zeros((len(raw), len(self.classes_)), dtype=float)
+        result = np.empty((len(raw), len(self.classes_)), dtype=float)
         for i, row in enumerate(raw):
             node = self.tree_
             while not node.leaf:
-                value = row[node.feature]
-                if _missing(value):
-                    go_left = node.missing_left
+                v = row[node.feature]
+                if _missing(v):
+                    left = node.missing_left
                 elif node.categorical:
-                    go_left = value == node.threshold
+                    left = v == node.threshold
                 else:
-                    go_left = float(value) <= node.threshold
-                node = node.left if go_left else node.right
+                    left = float(v) <= node.threshold
+                node = node.left if left else node.right
             result[i] = node.probabilities
         return result
 
@@ -205,9 +324,8 @@ class DecisionTreeCART:
 
     @staticmethod
     def load(path):
-        # Only load pickle files generated by you or trusted teammates.
         with Path(path).open('rb') as f:
-            model = pickle.load(f)
-        if not isinstance(model, DecisionTreeCART):
-            raise TypeError('Saved file is not a DecisionTreeCART')
-        return model
+            result = pickle.load(f)  # Only load trusted files.
+        if not isinstance(result, DecisionTreeCART):
+            raise TypeError('Saved object is not DecisionTreeCART')
+        return result

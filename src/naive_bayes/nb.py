@@ -4,6 +4,8 @@ import math
 
 
 class NaiveBayes:
+    UNKNOWN = "__UNK__"
+
     def __init__(self, alpha=1.0):
         if alpha <= 0:
             raise ValueError("alpha harus > 0")
@@ -17,6 +19,8 @@ class NaiveBayes:
             raise ValueError(f"Panjang X ({len(X)}) != panjang y ({len(y)})")
         if y.isna().any():
             raise ValueError("y mengandung NaN")
+        if len(y) == 0:
+            raise ValueError("Data training kosong")
 
         try:
             self.classes = sorted(y.unique().tolist())
@@ -30,6 +34,7 @@ class NaiveBayes:
 
         self.log_prior = {}
         self.log_cond = {f: {} for f in self.features}
+        self.vocabularies = {}
 
         # log P(vj)
         for c in self.classes:
@@ -37,8 +42,18 @@ class NaiveBayes:
 
         # log P(ai | vj) + smoothing
         for f in self.features:
-            values = X[f].dropna().unique()
-            V = len(values)
+            values = X[f].dropna().unique().tolist()
+
+            # __UNK__ untuk kategori baru
+            if self.UNKNOWN in values:
+                raise ValueError(
+                    f"Nilai {self.UNKNOWN} sudah digunakan sebagai kategori asli pada fitur '{f}'"
+                )
+
+            vocabulary = values + [self.UNKNOWN]
+            self.vocabularies[f] = set(vocabulary)
+
+            V = len(vocabulary)
 
             for c in self.classes:
                 col = X.loc[y == c, f].dropna()
@@ -47,7 +62,7 @@ class NaiveBayes:
 
                 self.log_cond[f][c] = {
                     v: math.log((counts.get(v, 0) + self.alpha) / (n_c + self.alpha * V))
-                    for v in values
+                    for v in vocabulary
                 }
 
         return self
@@ -69,19 +84,14 @@ class NaiveBayes:
             col = X[f].astype(object)
             missing = col.isna().to_numpy()
 
-            # cek unseen sekali per fitur (tabel nilai sama utk semua kelas)
-            known = set(self.log_cond[f][self.classes[0]].keys())
-            unseen_mask = ~missing & ~col.isin(known).to_numpy()
-            if unseen_mask.any():
-                bad = col[unseen_mask].unique().tolist()
-                raise ValueError(
-                    f"Kategori baru di fitur '{f}': {bad}. "
-                    f"Model strict tidak mendukung unseen category."
-                )
+            known = self.vocabularies[f]
+
+            # Kategori baru dipetakan ke __UNK__
+            mapped_col = col.where(col.isna() | col.isin(known), self.UNKNOWN)
 
             # akumulasi log P(fitur=f | kelas=c) untuk tiap kelas
             for j, c in enumerate(self.classes):
-                s = col.map(self.log_cond[f][c]).to_numpy(dtype=float)
+                s = mapped_col.map(self.log_cond[f][c]).to_numpy(dtype=float)
                 log_scores[:, j] += np.where(missing, 0.0, s) # NaN -> skip
 
         # normalisasi, log-sum-exp
