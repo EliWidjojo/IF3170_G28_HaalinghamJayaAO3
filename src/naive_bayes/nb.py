@@ -62,7 +62,7 @@ class NaiveBayes:
 
                 self.log_cond[f][c] = {
                     v: math.log((counts.get(v, 0) + self.alpha) / (n_c + self.alpha * V))
-                    for v in self.vocabulary
+                    for v in vocabulary
                 }
 
         return self
@@ -91,7 +91,7 @@ class NaiveBayes:
 
             # akumulasi log P(fitur=f | kelas=c) untuk tiap kelas
             for j, c in enumerate(self.classes):
-                s = col.map(self.log_cond[f][c]).to_numpy(dtype=float)
+                s = mapped_col.map(self.log_cond[f][c]).to_numpy(dtype=float)
                 log_scores[:, j] += np.where(missing, 0.0, s) # NaN -> skip
 
         # normalisasi, log-sum-exp
