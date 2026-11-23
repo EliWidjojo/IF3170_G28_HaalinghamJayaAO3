@@ -108,11 +108,12 @@ class NaiveBayes:
         return np.array([self.classes[i] for i in idx])
 
 
+    @staticmethod
     def _mutual_information(s1, s2):
-        """Menghitung Mutual Information I(X; Y) untuk dua variabel diskrit/kategorikal."""
         df_pair = pd.DataFrame({"x": s1, "y": s2}).dropna()
         if len(df_pair) == 0:
             return 0.0
+        
         joint = pd.crosstab(df_pair["x"], df_pair["y"], normalize=True)
         px = joint.sum(axis=1).to_numpy()[:, None]
         py = joint.sum(axis=0).to_numpy()[None, :]
@@ -157,7 +158,7 @@ class NaiveBayes:
             y_series = pd.Series(y).reset_index(drop=True)
             X_reset = X.reset_index(drop=True)
             for f in features:
-                fc_mi[f] = _mutual_information(X_reset[f], y_series)
+                fc_mi[f] = nb_model._mutual_information(X_reset[f], y_series)
 
             # Urutkan fitur berdasarkan MI tertinggi dengan kelas
             features = sorted(features, key=lambda f: fc_mi[f], reverse=True)
@@ -193,7 +194,7 @@ class NaiveBayes:
                     u, v = feature_nodes[i], feature_nodes[j]
                     raw_u = G.nodes[u]["raw_name"]
                     raw_v = G.nodes[v]["raw_name"]
-                    mi_ff = _mutual_information(X_reset[raw_u], X_reset[raw_v])
+                    mi_ff = nb_model._mutual_information(X_reset[raw_u], X_reset[raw_v])
                     if mi_ff >= feature_mi_threshold:
                         feature_edges.append((u, v, mi_ff))
 

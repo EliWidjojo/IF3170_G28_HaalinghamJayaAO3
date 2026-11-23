@@ -1,31 +1,9 @@
-"""CART classification from scratch: efficient exact Gini splitting.
-
-References (conceptual, NOT copied implementation):
-[6]-[14] N. U. Maulidevi, IF3270 Decision Tree Learning / Issues in DTL,
-         ITB lecture videos, 2021 (bibliography supplied in assignment).
-[23] GeeksforGeeks, 'CART (Classification And Regression Tree)',
-     https://www.geeksforgeeks.org/machine-learning/cart-classification-and-regression-tree-in-machine-learning/
-[24] GeeksforGeeks, 'Decision Tree Algorithms',
-     https://www.geeksforgeeks.org/machine-learning/decision-tree-algorithms/
-[27] L. Breiman, J. H. Friedman, R. A. Olshen, C. J. Stone,
-     Classification and Regression Trees, Wadsworth, 1984.
-[28] scikit-learn User Guide, Decision Trees / Mathematical formulation,
-     https://scikit-learn.org/stable/modules/tree.html
-
-All learning, split evaluation, and inference are implemented here using NumPy;
-no sklearn estimator or sklearn tree routines are used.
-
-Split search: sort numerical values once per feature/node, then compute all
-left/right class frequencies with cumulative sums, avoiding Python loops over
-candidate thresholds. Categorical splits are one category vs the rest.
-"""
 from dataclasses import dataclass
 from pathlib import Path
 import pickle
 import numpy as np
 from collections import deque
 import matplotlib.pyplot as plt
-
 
 
 def _missing(value):
@@ -57,15 +35,7 @@ class _Node:
 
 
 class DecisionTreeCART:
-    """Binary, greedy CART classifier with exact Gini candidate search.
-
-    max_features: None (all), positive integer, proportion (0,1], 'sqrt', 'log2'.
-    Notes: no post-pruning, sample weighting, or surrogate splits; probabilities
-    are unsmoothed empirical class frequencies at a leaf.
-    """
-
-    def __init__(self, max_depth=8, min_samples_split=2, min_samples_leaf=1,
-                 min_impurity_decrease=1e-10, max_features=None, random_state=42):
+    def __init__(self, max_depth=8, min_samples_split=2, min_samples_leaf=1, min_impurity_decrease=1e-10, max_features=None, random_state=42):
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
@@ -77,35 +47,38 @@ class DecisionTreeCART:
     def _gini_from_counts(counts):
         counts = np.asarray(counts, dtype=float)
         totals = counts.sum(axis=-1)
-        return 1.0 - np.divide((counts ** 2).sum(axis=-1), totals ** 2,
-                               out=np.zeros_like(totals, dtype=float), where=totals > 0)
+        return 1.0 - np.divide((counts ** 2).sum(axis=-1), totals ** 2, out=np.zeros_like(totals, dtype=float), where=totals > 0)
 
     def _feature_subset(self):
         p = self.n_features_in_
         mf = self.max_features
+
         if mf is None:
             return np.arange(p)
+        
         if isinstance(mf, str):
             n = max(1, int(np.sqrt(p))) if mf == 'sqrt' else max(1, int(np.log2(p)))
         elif isinstance(mf, (int, np.integer)):
             n = int(mf)
         else:
             n = max(1, int(float(mf) * p))
+
         if n == p:
             return np.arange(p)
         return np.sort(self._rng.choice(p, size=n, replace=False))
 
     def _best_numeric(self, column, yi, parent_counts):
-        # Returns (score, threshold, missing_left) or None.
         values = np.asarray([np.nan if _missing(v) else float(v) for v in column], dtype=float)
         missing = np.isnan(values)
         x = values[~missing]
+
         if len(x) < 2:
             return None
+        
         order = np.argsort(x, kind='stable')
         xs = x[order]
         ys = yi[~missing][order]
-        # Candidates only between distinct consecutive values.
+
         positions = np.flatnonzero(xs[:-1] < xs[1:])
         if len(positions) == 0:
             return None
@@ -120,50 +93,61 @@ class DecisionTreeCART:
 
         best = None
         best_score = np.inf
-        # Evaluate missing->left first to preserve old implementation tie preference.
+
+        # Uji nilai kosong ke cabang kiri lebih dulu
         for missing_left in (True, False) if missing.any() else (True,):
             lc = left_valid + (missing_counts if missing_left else 0)
             rc = right_valid + (0 if missing_left else missing_counts)
             nl = lc.sum(axis=1)
             nr = rc.sum(axis=1)
             allowed = (nl >= self.min_samples_leaf) & (nr >= self.min_samples_leaf)
+
             if not allowed.any():
                 continue
+
             scores = (nl * self._gini_from_counts(lc) +
                       nr * self._gini_from_counts(rc)) / len(column)
             scores[~allowed] = np.inf
             ix = int(np.argmin(scores))
             score = float(scores[ix])
-            # Midpoint stable against overflow for finite positive values.
+
+            # Hitung titik tengah sebagai threshold
             threshold = float(xs[positions[ix]] + (xs[positions[ix] + 1] - xs[positions[ix]]) / 2)
             if score < best_score - 1e-12:
                 best_score = score
                 best = (score, threshold, missing_left)
+
         return best
 
     def _best_categorical(self, column, yi, parent_counts):
         values = []
+
         for v in column:
             if not _missing(v) and not any(v == u for u in values):
                 values.append(v)
+
         if len(values) < 2:
             return None
+        
         miss = np.array([_missing(v) for v in column], dtype=bool)
         miss_counts = np.bincount(yi[miss], minlength=len(self.classes_))
         best = None
         best_score = np.inf
+    
         for v in values[:-1]:
             equals = np.array([not miss[i] and a == v for i, a in enumerate(column)], dtype=bool)
             for missing_left in (True, False) if miss.any() else (True,):
                 left_counts = np.bincount(yi[equals], minlength=len(self.classes_))
                 if missing_left:
                     left_counts = left_counts + miss_counts
+
                 right_counts = parent_counts - left_counts
                 nl, nr = int(left_counts.sum()), int(right_counts.sum())
+
                 if min(nl, nr) < self.min_samples_leaf:
                     continue
-                score = float((nl * self._gini_from_counts(left_counts) +
-                               nr * self._gini_from_counts(right_counts)) / len(column))
+
+                score = float((nl * self._gini_from_counts(left_counts) + nr * self._gini_from_counts(right_counts)) / len(column))
                 if score < best_score - 1e-12:
                     best_score = score
                     best = (score, v, missing_left)
@@ -177,6 +161,7 @@ class DecisionTreeCART:
             if missing_left:
                 mask[np.isnan(numeric)] = True
             return mask
+        
         return np.array([missing_left if _missing(v) else v == threshold for v in col], dtype=bool)
 
     def _build(self, X, yi, depth):
@@ -204,6 +189,7 @@ class DecisionTreeCART:
 
         if best is None or parent_gini - best_score < self.min_impurity_decrease:
             return node
+        
         j, threshold, categorical, missing_left = best
         mask = self._mask(X, j, threshold, categorical, missing_left)
         node.feature = int(j)
@@ -217,11 +203,14 @@ class DecisionTreeCART:
     def _validate_parameters(self, n_features):
         if self.max_depth is not None and (not isinstance(self.max_depth, (int, np.integer)) or self.max_depth < 0):
             raise ValueError('max_depth must be a nonnegative integer or None')
+        
         if (not isinstance(self.min_samples_split, (int, np.integer)) or self.min_samples_split < 2 or
             not isinstance(self.min_samples_leaf, (int, np.integer)) or self.min_samples_leaf < 1):
             raise ValueError('Invalid minimum sample parameters')
+        
         if not np.isfinite(self.min_impurity_decrease) or self.min_impurity_decrease < 0:
             raise ValueError('min_impurity_decrease must be finite and >= 0')
+        
         mf = self.max_features
         if mf is not None:
             if isinstance(mf, str):
@@ -249,12 +238,15 @@ class DecisionTreeCART:
         else:
             self.feature_names_ = None
             raw = np.asarray(X, dtype=object)
+
         targets = np.asarray(y).ravel()
         if raw.ndim != 2 or len(raw) == 0 or raw.shape[1] == 0 or len(targets) != len(raw):
             raise ValueError('X must be a nonempty 2D matrix with matching y')
         if any(_missing(v) for v in targets):
             raise ValueError('Missing target labels are not supported')
+        
         self._validate_parameters(raw.shape[1])
+
         if feature_types is None:
             feature_types = []
             for j in range(raw.shape[1]):
@@ -265,8 +257,10 @@ class DecisionTreeCART:
                     feature_types.append('numeric')
                 except (TypeError, ValueError):
                     feature_types.append('categorical')
+
         if len(feature_types) != raw.shape[1] or any(t not in ('numeric', 'categorical') for t in feature_types):
             raise ValueError('feature_types must contain numeric/categorical per column')
+        
         self.feature_types_ = list(feature_types)
         self.n_features_in_ = raw.shape[1]
         # Reject +/- infinity, because split logic assumes finite nonmissing numbers.
@@ -275,6 +269,7 @@ class DecisionTreeCART:
                 for v in raw[:, j]:
                     if not _missing(v) and not np.isfinite(float(v)):
                         raise ValueError(f'Numeric feature {j} contains infinity')
+                    
         self.classes_, yi = np.unique(targets, return_inverse=True)
         self._rng = np.random.default_rng(self.random_state)
         self.tree_ = self._build(raw, yi, 0)
@@ -283,6 +278,7 @@ class DecisionTreeCART:
     def _validate_X(self, X):
         if not hasattr(self, 'tree_'):
             raise RuntimeError('Call fit before predict')
+        
         if hasattr(X, 'columns') and self.feature_names_ is not None:
             missing = set(self.feature_names_) - set(X.columns)
             if missing:
@@ -291,6 +287,7 @@ class DecisionTreeCART:
             raw = X.to_numpy(dtype=object)
         else:
             raw = np.asarray(X, dtype=object)
+
         if raw.ndim == 1:
             raw = raw.reshape(1, -1)
         if raw.ndim != 2 or raw.shape[1] != self.n_features_in_:
@@ -328,26 +325,18 @@ class DecisionTreeCART:
     @staticmethod
     def load(path):
         with Path(path).open('rb') as f:
-            result = pickle.load(f)  # Only load trusted files.
+            result = pickle.load(f) 
         if not isinstance(result, DecisionTreeCART):
             raise TypeError('Saved object is not DecisionTreeCART')
         return result
     
     def export_tree_image(self, filepath="decision_tree.png", top_n=5):
-        """
-        Menghasilkan gambar percabangan tree dan menyimpannya ke file.
-
-        Parameters:
-        - filepath (str | Path): Path/nama file output (misal 'tree.png', 'tree.pdf', 'tree.svg').
-        - top_n (int | None): Jumlah maksimal percabangan (internal split) top-N yang ditampilkan
-                              berdasarkan urutan level dari root (BFS). Jika None, tampilkan semua.
-        """
         if not hasattr(self, "tree_"):
             raise RuntimeError("Call fit before exporting tree image")
         if top_n is not None and (not isinstance(top_n, (int, np.integer)) or top_n < 1):
             raise ValueError("top_n must be a positive integer or None")
 
-        # 1. Tentukan node percabangan mana saja yang masuk dalam Top-N (BFS dari root)
+        # Tentukan node percabangan mana saja yang masuk dalam Top-N (BFS dari root)
         expanded_nodes = set()
         queue = deque([self.tree_])
         while queue:
@@ -360,13 +349,13 @@ class DecisionTreeCART:
             queue.append(curr.left)
             queue.append(curr.right)
 
-        # 2. Hitung lebar subtree secara rekursif agar kotak node tidak tumpang tindih
+        # Hitung lebar subtree secara rekursif agar kotak node tidak tumpang tindih
         def _subtree_width(node):
             if node is None or node.leaf or id(node) not in expanded_nodes:
                 return 1
             return _subtree_width(node.left) + _subtree_width(node.right)
 
-        # 3. Hitung kedalaman visual maksimum untuk mengatur tinggi kanvas
+        # Hitung kedalaman visual maksimum untuk mengatur tinggi kanvas
         def _visual_depth(node):
             if node is None or node.leaf or id(node) not in expanded_nodes:
                 return 1
@@ -380,7 +369,7 @@ class DecisionTreeCART:
         fig, ax = plt.subplots(figsize=(fig_w, fig_h))
         ax.axis("off")
 
-        # 4. Format teks di dalam setiap kotak node
+        # Format teks di dalam setiap kotak node
         def _format_node_text(node, is_truncated):
             pred_label = self.classes_[node.prediction_index]
             probs_str = np.array2string(node.probabilities, precision=2, separator=", ")
@@ -404,7 +393,7 @@ class DecisionTreeCART:
                 return f"{header}\n[...cabang disembunyikan]\nPred: {pred_label}"
             return f"{header}\nPred: {pred_label} | {probs_str}"
 
-        # 5. Gambar node dan garis percabangan secara rekursif
+        # Gambar node dan garis percabangan secara rekursif
         def _draw(node, x, y, width_span):
             if node is None:
                 return
@@ -413,13 +402,13 @@ class DecisionTreeCART:
             text = _format_node_text(node, is_truncated)
 
             if node.leaf:
-                facecolor = "#d4edda"   # Hijau muda untuk Leaf
+                facecolor = "#d4edda"
                 edgecolor = "#28a745"
             elif is_truncated:
-                facecolor = "#fff3cd"   # Kuning muda untuk cabang yang dipotong oleh top_n
+                facecolor = "#fff3cd" 
                 edgecolor = "#d39e00"
             else:
-                facecolor = "#d1ecf1"   # Biru muda untuk Split aktif
+                facecolor = "#d1ecf1"
                 edgecolor = "#17a2b8"
 
             ax.text(
