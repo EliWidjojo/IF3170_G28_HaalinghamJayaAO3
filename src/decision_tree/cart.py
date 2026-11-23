@@ -23,6 +23,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import pickle
 import numpy as np
+from collections import deque
+import matplotlib.pyplot as plt
+
 
 
 def _missing(value):
@@ -329,3 +332,150 @@ class DecisionTreeCART:
         if not isinstance(result, DecisionTreeCART):
             raise TypeError('Saved object is not DecisionTreeCART')
         return result
+    
+    def export_tree_image(self, filepath="decision_tree.png", top_n=5):
+        """
+        Menghasilkan gambar percabangan tree dan menyimpannya ke file.
+
+        Parameters:
+        - filepath (str | Path): Path/nama file output (misal 'tree.png', 'tree.pdf', 'tree.svg').
+        - top_n (int | None): Jumlah maksimal percabangan (internal split) top-N yang ditampilkan
+                              berdasarkan urutan level dari root (BFS). Jika None, tampilkan semua.
+        """
+        if not hasattr(self, "tree_"):
+            raise RuntimeError("Call fit before exporting tree image")
+        if top_n is not None and (not isinstance(top_n, (int, np.integer)) or top_n < 1):
+            raise ValueError("top_n must be a positive integer or None")
+
+        # 1. Tentukan node percabangan mana saja yang masuk dalam Top-N (BFS dari root)
+        expanded_nodes = set()
+        queue = deque([self.tree_])
+        while queue:
+            curr = queue.popleft()
+            if curr is None or curr.leaf:
+                continue
+            if top_n is not None and len(expanded_nodes) >= top_n:
+                break
+            expanded_nodes.add(id(curr))
+            queue.append(curr.left)
+            queue.append(curr.right)
+
+        # 2. Hitung lebar subtree secara rekursif agar kotak node tidak tumpang tindih
+        def _subtree_width(node):
+            if node is None or node.leaf or id(node) not in expanded_nodes:
+                return 1
+            return _subtree_width(node.left) + _subtree_width(node.right)
+
+        # 3. Hitung kedalaman visual maksimum untuk mengatur tinggi kanvas
+        def _visual_depth(node):
+            if node is None or node.leaf or id(node) not in expanded_nodes:
+                return 1
+            return 1 + max(_visual_depth(node.left), _visual_depth(node.right))
+
+        total_width = _subtree_width(self.tree_)
+        max_vis_depth = _visual_depth(self.tree_)
+
+        fig_w = max(10.0, total_width * 2.6)
+        fig_h = max(6.0, max_vis_depth * 2.2)
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        ax.axis("off")
+
+        # 4. Format teks di dalam setiap kotak node
+        def _format_node_text(node, is_truncated):
+            pred_label = self.classes_[node.prediction_index]
+            probs_str = np.array2string(node.probabilities, precision=2, separator=", ")
+
+            if node.leaf:
+                return f"LEAF\nPred: {pred_label}\nProbs: {probs_str}"
+
+            feat_name = (
+                self.feature_names_[node.feature]
+                if getattr(self, "feature_names_", None) is not None
+                else f"X[{node.feature}]"
+            )
+            if node.categorical:
+                cond = f"{feat_name} == {node.threshold!r}"
+            else:
+                cond = f"{feat_name} <= {node.threshold:.4g}"
+
+            miss_dir = "Left" if node.missing_left else "Right"
+            header = f"{cond}\n(NaN -> {miss_dir})"
+            if is_truncated:
+                return f"{header}\n[...cabang disembunyikan]\nPred: {pred_label}"
+            return f"{header}\nPred: {pred_label} | {probs_str}"
+
+        # 5. Gambar node dan garis percabangan secara rekursif
+        def _draw(node, x, y, width_span):
+            if node is None:
+                return
+
+            is_truncated = (not node.leaf) and (id(node) not in expanded_nodes)
+            text = _format_node_text(node, is_truncated)
+
+            if node.leaf:
+                facecolor = "#d4edda"   # Hijau muda untuk Leaf
+                edgecolor = "#28a745"
+            elif is_truncated:
+                facecolor = "#fff3cd"   # Kuning muda untuk cabang yang dipotong oleh top_n
+                edgecolor = "#d39e00"
+            else:
+                facecolor = "#d1ecf1"   # Biru muda untuk Split aktif
+                edgecolor = "#17a2b8"
+
+            ax.text(
+                x, y, text,
+                ha="center", va="center", fontsize=8.5,
+                bbox=dict(boxstyle="round,pad=0.5", facecolor=facecolor, edgecolor=edgecolor, lw=1.5),
+                zorder=3,
+            )
+
+            if node.leaf or is_truncated:
+                return
+
+            left_w = _subtree_width(node.left)
+            right_w = _subtree_width(node.right)
+            tot_w = left_w + right_w
+
+            left_span = width_span * (left_w / tot_w)
+            right_span = width_span * (right_w / tot_w)
+
+            x_left = x - (width_span / 2.0) + (left_span / 2.0)
+            x_right = x + (width_span / 2.0) - (right_span / 2.0)
+            y_next = y - 1.0
+
+            # Cabang Kiri (True)
+            if node.left is not None:
+                ax.plot([x, x_left], [y, y_next], color="#555555", lw=1.3, zorder=1)
+                ax.text(
+                    (x + x_left) / 2.0, (y + y_next) / 2.0, "True",
+                    ha="right", va="center", fontsize=8, color="#155724",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.8),
+                    zorder=2,
+                )
+                _draw(node.left, x_left, y_next, left_span)
+
+            # Cabang Kanan (False)
+            if node.right is not None:
+                ax.plot([x, x_right], [y, y_next], color="#555555", lw=1.3, zorder=1)
+                ax.text(
+                    (x + x_right) / 2.0, (y + y_next) / 2.0, "False",
+                    ha="left", va="center", fontsize=8, color="#721c24",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.8),
+                    zorder=2,
+                )
+                _draw(node.right, x_right, y_next, right_span)
+
+        _draw(self.tree_, x=0.0, y=0.0, width_span=float(total_width))
+
+        ax.set_xlim(-total_width / 2.0 - 0.5, total_width / 2.0 + 0.5)
+        ax.set_ylim(-max_vis_depth + 0.3, 0.7)
+
+        title_suffix = f"Top-{top_n} Percabangan" if top_n is not None else "Semua Percabangan"
+        plt.title(f"Decision Tree CART ({title_suffix})", fontsize=12, fontweight="bold", pad=12)
+
+        out_path = Path(filepath)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(out_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return out_path
+
