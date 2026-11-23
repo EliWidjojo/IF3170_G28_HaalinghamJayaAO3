@@ -1,8 +1,3 @@
-"""Implementasi klasifikasi CART menggunakan Gini impurity.
-
-Acuan: materi DTL IF3170 dan dokumentasi scikit-learn.
-https://scikit-learn.org/stable/modules/tree.html
-"""
 from dataclasses import dataclass
 from pathlib import Path
 import pickle
@@ -38,7 +33,6 @@ class _Node:
 
 
 class DecisionTreeCART:
-    """Klasifikasi CART dengan pemilihan split berdasarkan Gini."""
 
     def __init__(self, max_depth=8, min_samples_split=2, min_samples_leaf=1,
                  min_impurity_decrease=1e-10, max_features=None, random_state=42):
@@ -71,9 +65,16 @@ class DecisionTreeCART:
             return np.arange(p)
         return np.sort(self._rng.choice(p, size=n, replace=False))
 
+
     def _best_numeric(self, column, yi, parent_counts):
         # Cari pemisahan numerik terbaik.
-        values = np.asarray([np.nan if _missing(v) else float(v) for v in column], dtype=float)
+        # Data numerik tidak perlu dikonversi per elemen.
+        if np.issubdtype(column.dtype, np.number): values = column.astype(float, copy=False)
+        else:
+            values = np.fromiter(
+                (np.nan if _missing(v) else float(v) for v in column),
+                dtype=float, count=len(column)
+            )
         missing = np.isnan(values)
         x = values[~missing]
         if len(x) < 2:
@@ -153,7 +154,13 @@ class DecisionTreeCART:
     def _mask(self, X, feature, threshold, categorical, missing_left):
         col = X[:, feature]
         if not categorical:
-            numeric = np.asarray([np.nan if _missing(v) else float(v) for v in col])
+            if np.issubdtype(col.dtype, np.number):
+                numeric = col.astype(float, copy=False)
+            else:
+                numeric = np.fromiter(
+                    (np.nan if _missing(v) else float(v) for v in col),
+                    dtype=float, count=len(col)
+                )
             mask = numeric <= threshold
             if missing_left:
                 mask[np.isnan(numeric)] = True
@@ -222,14 +229,14 @@ class DecisionTreeCART:
             self.feature_names_ = list(X.columns)
             if len(set(self.feature_names_)) != len(self.feature_names_):
                 raise ValueError('Nama fitur harus unik')
-            raw = X.to_numpy(dtype=object)
+            raw = X.to_numpy()
             if feature_types is None:
                 from pandas.api.types import is_numeric_dtype
                 feature_types = ['numeric' if is_numeric_dtype(X[c]) else 'categorical'
                                  for c in X.columns]
         else:
             self.feature_names_ = None
-            raw = np.asarray(X, dtype=object)
+            raw = np.asarray(X)
         targets = np.asarray(y).ravel()
         if raw.ndim != 2 or len(raw) == 0 or raw.shape[1] == 0 or len(targets) != len(raw):
             raise ValueError('X harus matriks 2D dan panjangnya sesuai y')
@@ -250,12 +257,19 @@ class DecisionTreeCART:
             raise ValueError('feature_types harus berisi numeric/categorical untuk setiap kolom')
         self.feature_types_ = list(feature_types)
         self.n_features_in_ = raw.shape[1]
+        # Pertahankan array numerik agar proses split lebih cepat.
+        if all(t == 'numeric' for t in self.feature_types_):
+            raw = raw.astype(float, copy=False)
         # Tolak nilai tak hingga.
         for j, t in enumerate(self.feature_types_):
             if t == 'numeric':
-                for v in raw[:, j]:
-                    if not _missing(v) and not np.isfinite(float(v)):
-                        raise ValueError(f'Fitur numerik {j} mengandung nilai tak hingga')
+                col = raw[:, j]
+                if np.issubdtype(col.dtype, np.number):
+                    invalid = np.isinf(col.astype(float, copy=False)).any()
+                else:
+                    invalid = any(not _missing(v) and not np.isfinite(float(v)) for v in col)
+                if invalid:
+                    raise ValueError(f'Fitur numerik {j} mengandung nilai tak hingga')
         self.classes_, yi = np.unique(targets, return_inverse=True)
         self._rng = np.random.default_rng(self.random_state)
         self.tree_ = self._build(raw, yi, 0)
