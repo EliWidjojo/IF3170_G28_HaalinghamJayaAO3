@@ -134,19 +134,6 @@ class NaiveBayes:
         top_k_features=None,
         filepath="naive_bayes_graph.png",
     ):
-        """
-        Menghasilkan gambar graf hubungan antarfitur dan variabel kelas untuk NaiveBayes.
-
-        Parameters:
-        - nb_model: Instance NaiveBayes yang sudah di-fit.
-        - X (pd.DataFrame, opsional): Data fitur untuk menghitung bobot Mutual Information.
-        - y (pd.Series/array, opsional): Label kelas untuk menghitung Mutual Information fitur-kelas.
-        - class_name (str): Nama label node variabel kelas.
-        - show_feature_links (bool): Jika True, menampilkan garis putus-putus hubungan empiris antarfitur.
-        - feature_mi_threshold (float): Ambang batas MI minimal untuk menampilkan garis antarfitur.
-        - top_k_features (int | None): Batasi jumlah fitur teratas (berdasarkan MI dengan kelas) agar graf rapi.
-        - filepath (str): Nama file output gambar.
-        """
         if not hasattr(nb_model, "log_cond"):
             raise RuntimeError("Model NaiveBayes belum di-fit.")
 
@@ -307,12 +294,33 @@ class NaiveBayes:
 
         # Legenda
         legend_elements = [
-            Line2D([0], [0], color="#0d6efd", lw=2, marker=">", markersize=8,
-                label="Dependensi Bersyarat Naive Bayes: P(Fitur | Kelas)"),
-            Line2D([0], [0], color="#adb5bd", lw=1.5, linestyle="--",
-                label=f"Asosiasi Empiris Antarfitur (MI ≥ {feature_mi_threshold})"),
+            Line2D(
+                [0], [0],
+                color="#0d6efd",
+                lw=2,
+                marker=">",
+                markersize=8,
+                label="Distribusi Bersyarat P(Fitur | Kelas)"
+            )
         ]
-        ax.legend(handles=legend_elements, loc="upper right", fontsize=8.5, framealpha=0.9)
+
+        if show_feature_links and feature_edges:
+            legend_elements.append(
+                Line2D(
+                    [0], [0],
+                    color="#adb5bd",
+                    lw=1.5,
+                    linestyle="--",
+                    label=f"Asosiasi Empiris Antarfitur (MI ≥ {feature_mi_threshold})"
+                )
+            )
+
+        ax.legend(
+            handles=legend_elements,
+            loc="upper right",
+            fontsize=8.5,
+            framealpha=0.9
+        )
 
         plt.title(
             "Graf Hubungan Antarfitur dan Variabel Kelas (Naive Bayes)",
