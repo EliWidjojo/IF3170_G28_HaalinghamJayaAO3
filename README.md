@@ -18,32 +18,73 @@ Pipeline sistem mencakup:
 ## Cara Setup dan Menjalankan Program
 
 ### 1. Prasyarat
-Pastikan perangkat Anda sudah terpasang:
-- **Python 3.9+**
-- **Jupyter Notebook** atau **JupyterLab** (atau menggunakan **Google Colab**)
 
-### 2. Instalasi Lokal
-1. **Clone repository ini:**
-   ```bash
-   git clone https://github.com/username/Tubes2-IF3170-Group28.git
-   cd Tubes2-IF3170-Group28
-   ```
+Program dikembangkan dan dijalankan menggunakan Google Colab. Seluruh eksperimen utama tersedia pada notebook di folder `notebooks/`.
 
-2. **Install semua dependensi yang diperlukan:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Atau install pustaka utama secara manual: `pip install numpy pandas matplotlib seaborn scikit-learn jupyter`)*
+Pustaka yang digunakan meliputi NumPy, pandas, Matplotlib, Seaborn, scikit-learn, NetworkX, dan IPython.
 
-### 3. Menjalankan Program
-1. Pastikan file dataset (`train.csv` dan `test.csv`) sudah berada di dalam folder `data/` (atau sesuaikan path direktori pada bagian konfigurasi `Settings` di dalam notebook).
-2. Jalankan Jupyter Notebook:
-   ```bash
-   jupyter notebook
-   ```
-3. Buka file `notebooks/Tubes2_IF3170_Group28.ipynb`.
-4. Sesuaikan konfigurasi eksperimen pada sel **`Settings`** (seperti opsi *oversampling*, *scaling*, atau pemilihan model).
-5. Jalankan seluruh sel secara berurutan melalui menu **Kernel > Restart & Run All**.
+Untuk menjalankan secara lokal, pengguna juga memerlukan Python 3 dan Jupyter Notebook atau JupyterLab.
+
+### 2. Menjalankan di Google Colab (Direkomendasikan)
+
+Notebook memiliki konfigurasi untuk melakukan cloning repository GitHub secara otomatis. Pada versi saat ini, proses tersebut menggunakan autentikasi melalui Google Colab Secrets.
+
+Langkah menjalankan program:
+
+1. Buka notebook yang tersedia di folder `notebooks/` menggunakan Google Colab.
+2. Buka menu **Secrets** pada sidebar Google Colab.
+3. Tambahkan secret dengan nama `GITHUB_TOKEN` yang berisi GitHub Personal Access Token.
+4. Jika repository masih private, pastikan token memiliki izin membaca repository tersebut. Aktifkan akses notebook terhadap secret.
+5. Jalankan seluruh cell notebook secara berurutan.
+
+Autentikasi dilakukan menggunakan Colab Secrets sehingga token tidak perlu ditulis secara langsung dalam kode.
+
+**Catatan:** Repository direncanakan menjadi public. Namun, konfigurasi notebook saat ini masih meminta `GITHUB_TOKEN` meskipun repository sudah public. Pengguna tetap perlu menyiapkan secret tersebut selama blok autentikasi belum diubah, atau menyesuaikan cell setup untuk menggunakan cloning tanpa autentikasi.
+
+### 3. Menjalankan Secara Lokal
+
+Clone repository menggunakan Git:
+
+```bash
+git clone https://github.com/EliWidjojo/IF3170_G28_HaalinghamJayaAO3.git
+cd IF3170_G28_HaalinghamJayaAO3
+```
+
+Selama repository masih private, proses cloning memerlukan akun yang memiliki izin akses.
+
+Instal pustaka yang diperlukan:
+
+```bash
+python -m pip install numpy pandas matplotlib seaborn scikit-learn networkx ipython jupyter
+```
+
+Jalankan Jupyter Notebook:
+
+```bash
+jupyter notebook
+```
+
+Buka notebook pada folder `notebooks/`.
+
+**Penyesuaian untuk lingkungan lokal:**
+
+Notebook memiliki blok setup khusus Google Colab pada cell **Import Libraries**. Pengguna yang menjalankan secara lokal perlu menonaktifkan bagian tersebut, mulai dari:
+
+```python
+from google.colab import userdata
+```
+
+hingga blok:
+
+```python
+print(f"Repository siap: {os.getcwd()}")
+```
+
+Selanjutnya, atur working directory ke root repository dan tambahkan lokasi tersebut ke Python path sebelum bagian import algoritma from scratch.
+
+Bagian import pustaka umum dan implementasi algoritma tetap harus dijalankan.
+
+Pastikan data tersedia pada folder `data/`, kemudian jalankan seluruh cell secara berurutan.
 
 ---
 
