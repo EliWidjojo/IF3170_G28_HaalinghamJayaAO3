@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import pickle
 import numpy as np
+from collections import deque
+import matplotlib.pyplot as plt
 
 
 def _missing(value):
@@ -33,9 +35,7 @@ class _Node:
 
 
 class DecisionTreeCART:
-
-    def __init__(self, max_depth=8, min_samples_split=2, min_samples_leaf=1,
-                 min_impurity_decrease=1e-10, max_features=None, random_state=42):
+    def __init__(self, max_depth=8, min_samples_split=2, min_samples_leaf=1, min_impurity_decrease=1e-10, max_features=None, random_state=42):
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
@@ -47,42 +47,39 @@ class DecisionTreeCART:
     def _gini_from_counts(counts):
         counts = np.asarray(counts, dtype=float)
         totals = counts.sum(axis=-1)
-        return 1.0 - np.divide((counts ** 2).sum(axis=-1), totals ** 2,
-                               out=np.zeros_like(totals, dtype=float), where=totals > 0)
+        return 1.0 - np.divide((counts ** 2).sum(axis=-1), totals ** 2, out=np.zeros_like(totals, dtype=float), where=totals > 0)
 
     def _feature_subset(self):
         p = self.n_features_in_
         mf = self.max_features
+
         if mf is None:
             return np.arange(p)
+        
         if isinstance(mf, str):
             n = max(1, int(np.sqrt(p))) if mf == 'sqrt' else max(1, int(np.log2(p)))
         elif isinstance(mf, (int, np.integer)):
             n = int(mf)
         else:
             n = max(1, int(float(mf) * p))
+
         if n == p:
             return np.arange(p)
         return np.sort(self._rng.choice(p, size=n, replace=False))
 
 
     def _best_numeric(self, column, yi, parent_counts):
-        # Cari pemisahan numerik terbaik.
-        # Data numerik tidak perlu dikonversi per elemen.
-        if np.issubdtype(column.dtype, np.number): values = column.astype(float, copy=False)
-        else:
-            values = np.fromiter(
-                (np.nan if _missing(v) else float(v) for v in column),
-                dtype=float, count=len(column)
-            )
+        values = np.asarray([np.nan if _missing(v) else float(v) for v in column], dtype=float)
         missing = np.isnan(values)
         x = values[~missing]
+
         if len(x) < 2:
             return None
+        
         order = np.argsort(x, kind='stable')
         xs = x[order]
         ys = yi[~missing][order]
-        # Ambang berada di antara nilai berbeda.
+
         positions = np.flatnonzero(xs[:-1] < xs[1:])
         if len(positions) == 0:
             return None
@@ -97,55 +94,61 @@ class DecisionTreeCART:
 
         best = None
         best_score = np.inf
-        # Uji nilai kosong ke cabang kiri lebih dulu.
+
+        # Uji nilai kosong ke cabang kiri lebih dulu
         for missing_left in (True, False) if missing.any() else (True,):
             lc = left_valid + (missing_counts if missing_left else 0)
             rc = right_valid + (0 if missing_left else missing_counts)
             nl = lc.sum(axis=1)
             nr = rc.sum(axis=1)
             allowed = (nl >= self.min_samples_leaf) & (nr >= self.min_samples_leaf)
+
             if not allowed.any():
                 continue
+
             scores = (nl * self._gini_from_counts(lc) +
                       nr * self._gini_from_counts(rc)) / len(column)
             scores[~allowed] = np.inf
             ix = int(np.argmin(scores))
             score = float(scores[ix])
-            # Hitung titik tengah sebagai ambang.
+
+            # Hitung titik tengah sebagai threshold
             threshold = float(xs[positions[ix]] + (xs[positions[ix] + 1] - xs[positions[ix]]) / 2)
             if score < best_score - 1e-12:
                 best_score = score
                 best = (score, threshold, missing_left)
+
         return best
 
     def _best_categorical(self, column, yi, parent_counts):
-        # Pisahkan satu kategori dari kategori lainnya.
-        missing = np.array([_missing(v) for v in column], dtype=bool)
-        observed = []
-        for value in column[~missing]:
-            if not any(value == item for item in observed):
-                observed.append(value)
-        if not observed:
-            return None
-        if len(observed) == 1 and not missing.any():
-            return None
+        values = []
 
-        missing_counts = np.bincount(yi[missing], minlength=len(self.classes_))
+        for v in column:
+            if not _missing(v) and not any(v == u for u in values):
+                values.append(v)
+
+        if len(values) < 2:
+            return None
+        
+        miss = np.array([_missing(v) for v in column], dtype=bool)
+        miss_counts = np.bincount(yi[miss], minlength=len(self.classes_))
         best = None
         best_score = np.inf
-        for value in observed:
-            equal = np.array([not missing[i] and v == value
-                              for i, v in enumerate(column)], dtype=bool)
-            value_counts = np.bincount(yi[equal], minlength=len(self.classes_))
-            for missing_left in ((True, False) if missing.any() else (True,)):
-                left_counts = value_counts + (missing_counts if missing_left else 0)
+    
+        for v in values[:-1]:
+            equals = np.array([not miss[i] and a == v for i, a in enumerate(column)], dtype=bool)
+            for missing_left in (True, False) if miss.any() else (True,):
+                left_counts = np.bincount(yi[equals], minlength=len(self.classes_))
+                if missing_left:
+                    left_counts = left_counts + miss_counts
+
                 right_counts = parent_counts - left_counts
-                n_left = int(left_counts.sum())
-                n_right = int(right_counts.sum())
-                if min(n_left, n_right) < self.min_samples_leaf:
+                nl, nr = int(left_counts.sum()), int(right_counts.sum())
+
+                if min(nl, nr) < self.min_samples_leaf:
                     continue
-                score = float((n_left * self._gini_from_counts(left_counts) +
-                               n_right * self._gini_from_counts(right_counts)) / len(column))
+
+                score = float((nl * self._gini_from_counts(left_counts) + nr * self._gini_from_counts(right_counts)) / len(column))
                 if score < best_score - 1e-12:
                     best_score = score
                     best = (score, value, missing_left)
@@ -165,6 +168,7 @@ class DecisionTreeCART:
             if missing_left:
                 mask[np.isnan(numeric)] = True
             return mask
+        
         return np.array([missing_left if _missing(v) else v == threshold for v in col], dtype=bool)
 
     def _build(self, X, yi, depth):
@@ -192,6 +196,7 @@ class DecisionTreeCART:
 
         if best is None or parent_gini - best_score < self.min_impurity_decrease:
             return node
+        
         j, threshold, categorical, missing_left = best
         mask = self._mask(X, j, threshold, categorical, missing_left)
         node.feature = int(j)
@@ -204,12 +209,15 @@ class DecisionTreeCART:
 
     def _validate_parameters(self, n_features):
         if self.max_depth is not None and (not isinstance(self.max_depth, (int, np.integer)) or self.max_depth < 0):
-            raise ValueError('max_depth harus bilangan bulat nonnegatif atau None')
+            raise ValueError('max_depth must be a nonnegative integer or None')
+        
         if (not isinstance(self.min_samples_split, (int, np.integer)) or self.min_samples_split < 2 or
             not isinstance(self.min_samples_leaf, (int, np.integer)) or self.min_samples_leaf < 1):
-            raise ValueError('Parameter jumlah sampel tidak valid')
+            raise ValueError('Invalid minimum sample parameters')
+        
         if not np.isfinite(self.min_impurity_decrease) or self.min_impurity_decrease < 0:
-            raise ValueError('min_impurity_decrease harus bernilai hingga dan >= 0')
+            raise ValueError('min_impurity_decrease must be finite and >= 0')
+        
         mf = self.max_features
         if mf is not None:
             if isinstance(mf, str):
@@ -236,13 +244,16 @@ class DecisionTreeCART:
                                  for c in X.columns]
         else:
             self.feature_names_ = None
-            raw = np.asarray(X)
+            raw = np.asarray(X, dtype=object)
+
         targets = np.asarray(y).ravel()
         if raw.ndim != 2 or len(raw) == 0 or raw.shape[1] == 0 or len(targets) != len(raw):
             raise ValueError('X harus matriks 2D dan panjangnya sesuai y')
         if any(_missing(v) for v in targets):
-            raise ValueError('Label target tidak boleh kosong')
+            raise ValueError('Missing target labels are not supported')
+        
         self._validate_parameters(raw.shape[1])
+
         if feature_types is None:
             feature_types = []
             for j in range(raw.shape[1]):
@@ -253,8 +264,10 @@ class DecisionTreeCART:
                     feature_types.append('numeric')
                 except (TypeError, ValueError):
                     feature_types.append('categorical')
+
         if len(feature_types) != raw.shape[1] or any(t not in ('numeric', 'categorical') for t in feature_types):
-            raise ValueError('feature_types harus berisi numeric/categorical untuk setiap kolom')
+            raise ValueError('feature_types must contain numeric/categorical per column')
+        
         self.feature_types_ = list(feature_types)
         self.n_features_in_ = raw.shape[1]
         # Pertahankan array numerik agar proses split lebih cepat.
@@ -263,13 +276,10 @@ class DecisionTreeCART:
         # Tolak nilai tak hingga.
         for j, t in enumerate(self.feature_types_):
             if t == 'numeric':
-                col = raw[:, j]
-                if np.issubdtype(col.dtype, np.number):
-                    invalid = np.isinf(col.astype(float, copy=False)).any()
-                else:
-                    invalid = any(not _missing(v) and not np.isfinite(float(v)) for v in col)
-                if invalid:
-                    raise ValueError(f'Fitur numerik {j} mengandung nilai tak hingga')
+                for v in raw[:, j]:
+                    if not _missing(v) and not np.isfinite(float(v)):
+                        raise ValueError(f'Numeric feature {j} contains infinity')
+                    
         self.classes_, yi = np.unique(targets, return_inverse=True)
         self._rng = np.random.default_rng(self.random_state)
         self.tree_ = self._build(raw, yi, 0)
@@ -277,7 +287,8 @@ class DecisionTreeCART:
 
     def _validate_X(self, X):
         if not hasattr(self, 'tree_'):
-            raise RuntimeError('Jalankan fit sebelum predict')
+            raise RuntimeError('Call fit before predict')
+        
         if hasattr(X, 'columns') and self.feature_names_ is not None:
             missing = set(self.feature_names_) - set(X.columns)
             if missing:
@@ -286,6 +297,7 @@ class DecisionTreeCART:
             raw = X.to_numpy(dtype=object)
         else:
             raw = np.asarray(X, dtype=object)
+
         if raw.ndim == 1:
             raw = raw.reshape(1, -1)
         if raw.ndim != 2 or raw.shape[1] != self.n_features_in_:
@@ -323,7 +335,146 @@ class DecisionTreeCART:
     @staticmethod
     def load(path):
         with Path(path).open('rb') as f:
-            result = pickle.load(f)  # Muat hanya file tepercaya.
+            result = pickle.load(f) 
         if not isinstance(result, DecisionTreeCART):
             raise TypeError('File bukan model DecisionTreeCART')
         return result
+    
+    def export_tree_image(self, filepath="decision_tree.png", top_n=5):
+        if not hasattr(self, "tree_"):
+            raise RuntimeError("Call fit before exporting tree image")
+        if top_n is not None and (not isinstance(top_n, (int, np.integer)) or top_n < 1):
+            raise ValueError("top_n must be a positive integer or None")
+
+        # Tentukan node percabangan mana saja yang masuk dalam Top-N (BFS dari root)
+        expanded_nodes = set()
+        queue = deque([self.tree_])
+        while queue:
+            curr = queue.popleft()
+            if curr is None or curr.leaf:
+                continue
+            if top_n is not None and len(expanded_nodes) >= top_n:
+                break
+            expanded_nodes.add(id(curr))
+            queue.append(curr.left)
+            queue.append(curr.right)
+
+        # Hitung lebar subtree secara rekursif agar kotak node tidak tumpang tindih
+        def _subtree_width(node):
+            if node is None or node.leaf or id(node) not in expanded_nodes:
+                return 1
+            return _subtree_width(node.left) + _subtree_width(node.right)
+
+        # Hitung kedalaman visual maksimum untuk mengatur tinggi kanvas
+        def _visual_depth(node):
+            if node is None or node.leaf or id(node) not in expanded_nodes:
+                return 1
+            return 1 + max(_visual_depth(node.left), _visual_depth(node.right))
+
+        total_width = _subtree_width(self.tree_)
+        max_vis_depth = _visual_depth(self.tree_)
+
+        fig_w = max(10.0, total_width * 2.6)
+        fig_h = max(6.0, max_vis_depth * 2.2)
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        ax.axis("off")
+
+        # Format teks di dalam setiap kotak node
+        def _format_node_text(node, is_truncated):
+            pred_label = self.classes_[node.prediction_index]
+            probs_str = np.array2string(node.probabilities, precision=2, separator=", ")
+
+            if node.leaf:
+                return f"LEAF\nPred: {pred_label}\nProbs: {probs_str}"
+
+            feat_name = (
+                self.feature_names_[node.feature]
+                if getattr(self, "feature_names_", None) is not None
+                else f"X[{node.feature}]"
+            )
+            if node.categorical:
+                cond = f"{feat_name} == {node.threshold!r}"
+            else:
+                cond = f"{feat_name} <= {node.threshold:.4g}"
+
+            miss_dir = "Left" if node.missing_left else "Right"
+            header = f"{cond}\n(NaN -> {miss_dir})"
+            if is_truncated:
+                return f"{header}\n[...cabang disembunyikan]\nPred: {pred_label}"
+            return f"{header}\nPred: {pred_label} | {probs_str}"
+
+        # Gambar node dan garis percabangan secara rekursif
+        def _draw(node, x, y, width_span):
+            if node is None:
+                return
+
+            is_truncated = (not node.leaf) and (id(node) not in expanded_nodes)
+            text = _format_node_text(node, is_truncated)
+
+            if node.leaf:
+                facecolor = "#d4edda"
+                edgecolor = "#28a745"
+            elif is_truncated:
+                facecolor = "#fff3cd" 
+                edgecolor = "#d39e00"
+            else:
+                facecolor = "#d1ecf1"
+                edgecolor = "#17a2b8"
+
+            ax.text(
+                x, y, text,
+                ha="center", va="center", fontsize=8.5,
+                bbox=dict(boxstyle="round,pad=0.5", facecolor=facecolor, edgecolor=edgecolor, lw=1.5),
+                zorder=3,
+            )
+
+            if node.leaf or is_truncated:
+                return
+
+            left_w = _subtree_width(node.left)
+            right_w = _subtree_width(node.right)
+            tot_w = left_w + right_w
+
+            left_span = width_span * (left_w / tot_w)
+            right_span = width_span * (right_w / tot_w)
+
+            x_left = x - (width_span / 2.0) + (left_span / 2.0)
+            x_right = x + (width_span / 2.0) - (right_span / 2.0)
+            y_next = y - 1.0
+
+            # Cabang Kiri (True)
+            if node.left is not None:
+                ax.plot([x, x_left], [y, y_next], color="#555555", lw=1.3, zorder=1)
+                ax.text(
+                    (x + x_left) / 2.0, (y + y_next) / 2.0, "True",
+                    ha="right", va="center", fontsize=8, color="#155724",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.8),
+                    zorder=2,
+                )
+                _draw(node.left, x_left, y_next, left_span)
+
+            # Cabang Kanan (False)
+            if node.right is not None:
+                ax.plot([x, x_right], [y, y_next], color="#555555", lw=1.3, zorder=1)
+                ax.text(
+                    (x + x_right) / 2.0, (y + y_next) / 2.0, "False",
+                    ha="left", va="center", fontsize=8, color="#721c24",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white", edgecolor="none", alpha=0.8),
+                    zorder=2,
+                )
+                _draw(node.right, x_right, y_next, right_span)
+
+        _draw(self.tree_, x=0.0, y=0.0, width_span=float(total_width))
+
+        ax.set_xlim(-total_width / 2.0 - 0.5, total_width / 2.0 + 0.5)
+        ax.set_ylim(-max_vis_depth + 0.3, 0.7)
+
+        title_suffix = f"Top-{top_n} Percabangan" if top_n is not None else "Semua Percabangan"
+        plt.title(f"Decision Tree CART ({title_suffix})", fontsize=12, fontweight="bold", pad=12)
+
+        out_path = Path(filepath)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(out_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return out_path
+
